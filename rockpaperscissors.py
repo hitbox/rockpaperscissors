@@ -71,6 +71,16 @@ class RandomPlayer(Player):
         return random.choice(list(ThrowType))
 
 
+class AlwaysPlayer(Player):
+
+    def __init__(self, choice, *args):
+        super().__init__(*args)
+        self.choice = choice
+
+    def __call__(self):
+        return self.choice
+
+
 class CyclePlayer(Player):
 
     throws = cycle(ThrowType)
@@ -263,21 +273,58 @@ def rectattr(rect, **attrs):
         setattr(rect, key, value)
     return rect
 
-def draw_paper(size, background, linecolor, width):
+def draw_paper(size, color):
     image = pygame.Surface(size, flags=pygame.SRCALPHA)
-    image.fill(background)
+    rect = image.get_rect()
+    points = [
+        rect.topleft,
+        (rect.width * 0.8, rect.top),
+        (rect.width, rect.height * 0.2),
+        rect.bottomright,
+        rect.bottomleft,
+    ]
+    pygame.draw.polygon(image, color, points)
+    return image
+
+def draw_scissors(size, linecolor):
+    image = pygame.Surface(size, flags=pygame.SRCALPHA)
     w, h = size
     rect = image.get_rect()
     area = rect.inflate(-w*.2, -h*.2)
     points = [
-        area.topleft,
-        (area.width * 0.8, area.top),
-        (area.width, area.height * 0.2),
-        area.bottomright,
-        area.bottomleft,
+        (area.width * .2, area.height * .2),
+        (area.width * .45, area.centery * 1.1),
+        (area.width * .55, area.centery),
     ]
-    print(points)
-    pygame.draw.polygon(image, linecolor, points, width)
+    pygame.draw.polygon(image, linecolor, points)
+    points = [
+        (area.width * .8, area.height * .2),
+        (area.width * .55, area.centery),
+        (area.width * .65, area.centery * 1.1),
+    ]
+    pygame.draw.polygon(image, linecolor, points)
+    center = (area.width * .4, area.height * .8)
+    radius = min(size)//6
+    width = min(size)//16
+    pygame.draw.circle(image, linecolor, center, radius, width)
+    center = (area.width * .7, area.height * .8)
+    pygame.draw.circle(image, linecolor, center, radius, width)
+    return image
+
+def draw_rock(size, linecolor):
+    image = pygame.Surface(size, flags=pygame.SRCALPHA)
+    rect = image.get_rect()
+    radius = min(rect.size) * .5
+    points = []
+    var = min(rect.size) // 16
+    var = cycle([var,-var])
+    for angle in range(0, 360, 30):
+        angle = math.radians(angle)
+        r = radius + next(var)
+        x = rect.centerx + math.cos(angle) * r
+        y = rect.centery + math.sin(angle) * r
+        points.append((x,y))
+    pygame.draw.polygon(image, linecolor, points)
     return image
 
 class PygameInterface(RockPaperScissorsGame):
@@ -287,14 +334,16 @@ class PygameInterface(RockPaperScissorsGame):
         pygame.font.init()
         self.clock = pygame.time.Clock()
         self.framerate = 60
-        self.font = pygame.font.Font(None, 16)
-        self.bigfont = pygame.font.Font(None, 32)
-        self.buffer = pygame.Surface((240, 200))
+        self.buffer = pygame.Surface((800, 800))
         self.rect = self.buffer.get_rect()
         self.area = self.rect.inflate(-20, -20)
-        self.screen = pygame.display.set_mode(scale(self.rect.size, 4))
-        self._flash_remaining = False
-        self._eliminations = set()
+        self.screen = pygame.display.set_mode(scale(self.rect.size, 1))
+        #
+        size = int(min(self.rect.size) * .095)
+        self.font = pygame.font.Font(None, size)
+        size = int(min(self.rect.size) * .2)
+        self.bigfont = pygame.font.Font(None, size)
+        #
         r = 5
         self._flash_remaining_colors = cycle(
             chain(
@@ -302,10 +351,15 @@ class PygameInterface(RockPaperScissorsGame):
                 repeat((255,255,255), r),
             )
         )
-        self._throws = {}
-        self._winner = None
-        self._delay = 50
         #
+        self._eliminations = set()
+        self._throws = {}
+        self._delay = 30
+
+    def start(self):
+        #
+        self._throws.clear()
+        self._winner = None
         self._round_starting = False
         r = 5
         self._round_starting_colors = cycle(
@@ -319,7 +373,12 @@ class PygameInterface(RockPaperScissorsGame):
         self.throwsize = max(self.font.size(attr.name[0]) for attr in ThrowType)
 
         self._throw_images = {}
-        self._throw_images[ThrowType.PAPER] = draw_paper(self.throwsize, (200,200,200), (10,10,10), 1)
+        image = draw_paper(self.throwsize, (200,200,200))
+        self._throw_images[ThrowType.PAPER] = image
+        image = draw_scissors(self.throwsize, (200,200,200))
+        self._throw_images[ThrowType.SCISSORS] = image
+        image = draw_rock(self.throwsize, (200,200,200))
+        self._throw_images[ThrowType.ROCK] = image
 
         def _prect(player):
             r = pygame.Rect((0,0), self.font.size(player.name))
@@ -327,13 +386,19 @@ class PygameInterface(RockPaperScissorsGame):
             return r
 
         self.positions = {player: _prect(player) for player in self.players}
-        layout_flow(self.positions.values(), self.area.width, betweenx=5, betweeny=5)
+
+        size = int(min(self.rect.size) * .05)
+        layout_flow(self.positions.values(), self.area.width, betweenx=size, betweeny=size)
+
         bounding = rectwrap(self.positions.values())
         positioned = rectattr(bounding, midbottom=self.area.midbottom)
         dx = positioned.x - bounding.x
         dy = positioned.y - bounding.y
         for rect in self.positions.values():
             rect.move_ip(dx, dy)
+        #
+        self._flash_remaining = False
+        self._eliminations.clear()
         #
         self._update()
         self._drawstate()
@@ -418,7 +483,8 @@ class PygameInterface(RockPaperScissorsGame):
     def gameover(self, winner):
         self._winner = winner
         target = self.rect.center
-        pos = list(self.positions[winner].center)
+        rect = self.positions[winner]
+        pos = [rect.centerx, rect.top]
 
         def isclose(a, b):
             return math.isclose(a, b, rel_tol=0.01)

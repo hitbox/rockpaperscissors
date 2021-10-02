@@ -1,0 +1,2 @@
+class RPSError(Exception):
+    pass

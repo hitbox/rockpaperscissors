@@ -13,41 +13,41 @@ class Player(abc.ABC):
         self.name = name
 
     @abc.abstractmethod
-    def __call__(self):
+    def throw(self):
         raise NotImplementedError
 
 
 class AlwaysPlayer(Player):
-    "Player always throws one type"
+    "Player always throws one type of gesture"
 
-    def __init__(self, gesture, *args):
-        super().__init__(*args)
+    def __init__(self, name, gesture):
+        super().__init__(name)
         self.gesture = gesture
 
-    def __call__(self):
+    def throw(self):
         return self.gesture
 
 
 class RandomPlayer(Player):
-    "Player throws randomly"
+    "Player throws random gestures"
 
-    def __call__(self):
+    def throw(self):
         return random.choice(list(Gestures))
 
 
 class CyclePlayer(Player):
-    "Player cycles through every type of throw"
+    "Player cycles through every type of gesture"
 
     throws = cycle(Gestures)
 
-    def __call__(self):
+    def throw(self):
         return next(self.throws)
 
 
 class StdinPlayer(Player):
-    "Player reads throw from stdin."
+    "Player reads throw from stdin"
 
-    def __call__(self):
+    def throw(self):
         while True:
             throw = input(f'{self.name} (RPS)> ').lower()
             if throw not in COMMANDS:

@@ -9,7 +9,9 @@ class Gestures(Enum):
 
 Gestures.PAPER.beats = Gestures.ROCK
 Gestures.PAPER.verb = 'covers'
+
 Gestures.ROCK.beats = Gestures.SCISSORS
 Gestures.ROCK.verb = 'smashes'
+
 Gestures.SCISSORS.beats = Gestures.PAPER
 Gestures.SCISSORS.verb = 'cuts'
